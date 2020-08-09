@@ -15,6 +15,9 @@ set_property(TARGET QtSQLx PROPERTY LANGUAGE CXX)
 set_property(TARGET QtSQLx PROPERTY LINKER_LANGUAGE CXX)
 
 
+option(BUILD_TESTS "Skip buildling tests" ON)
+
+if (BUILD_TESTS)
 find_package(Catch2 REQUIRED)
 add_executable(QtSQLx_test
         test/TypeUtilsTest.cpp
@@ -23,3 +26,4 @@ add_executable(QtSQLx_test
 target_link_libraries(QtSQLx_test Catch2::Catch2 QtSQLx)
 target_compile_definitions(QtSQLx_test PRIVATE CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS)
 set_property(TARGET QtSQLx_test PROPERTY AUTOMOC ON)
+endif()
