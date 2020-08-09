@@ -21,4 +21,5 @@ add_executable(QtSQLx_test
         test/DbUtilsTest.cpp
         test/main.cpp)
 target_link_libraries(QtSQLx_test Catch2::Catch2 QtSQLx)
+target_compile_definitions(QtSQLx_test PRIVATE CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS)
 set_property(TARGET QtSQLx_test PROPERTY AUTOMOC ON)

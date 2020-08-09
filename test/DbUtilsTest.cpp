@@ -111,14 +111,14 @@ TEST_CASE("Should perform correct database operations") {
     auto db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName(":memory:");
     REQUIRE(db.open());
-    REQUIRE(sqlx::DbUtils::update(db, "create table tests (id integer primary key, name text)"));
+    REQUIRE(sqlx::DbUtils::update(db, "create table tests (id integer primary key on conflict fail, name text)"));
 
     QVector<TestObject> inputs(50);
     for (int i = 0; i < inputs.size(); i++) {
         inputs[i].id = i + 1;
         inputs[i].name = QStringLiteral("Name %1").arg(i + 1);
         REQUIRE(sqlx::DbUtils::insert<int>(db, "insert into tests (id, name) values (?, ?)",
-                { inputs[i].id, inputs[i].name }));
+                                           {inputs[i].id, inputs[i].name}));
     }
 
     SECTION("queryList with POD") {
@@ -127,15 +127,15 @@ TEST_CASE("Should perform correct database operations") {
                         {
                                 {
                                         "select * from tests order by id asc limit 10",
-                                        {}, inputs.mid(0, 10), true,
+                                        {},  inputs.mid(0, 10), true,
                                 },
                                 {
                                         "select * from tests where id = ?",
-                                        {1}, inputs.mid(0, 1), true,
+                                        {1}, inputs.mid(0, 1),  true,
                                 },
                                 {
                                         "select * from tests2 where id = ?",
-                                        {1}, {}, false,
+                                        {1}, {},                false,
                                 },
                         }
                 ));
@@ -152,19 +152,19 @@ TEST_CASE("Should perform correct database operations") {
 
     SECTION("queryList with primitive") {
         auto[querySql, binds, expectedData, expectedSuccess] = GENERATE(
-                table<QString, QVector<QVariant>,QVector<int>, bool>(
+                table<QString, QVector<QVariant>, QVector<int>, bool>(
                         {
                                 {
                                         "select id from tests order by id asc limit 3",
-                                        {}, { 1, 2, 3 }, true,
+                                        {},  {1, 2, 3}, true,
                                 },
                                 {
                                         "select id from tests where id = ?",
-                                        { 1 }, { 1 }, true,
+                                        {1}, {1},       true,
                                 },
                                 {
                                         "select * from tests2 where id = ?",
-                                        { 1 }, {}, false,
+                                        {1}, {},        false,
                                 },
                         }
                 ));
@@ -180,7 +180,155 @@ TEST_CASE("Should perform correct database operations") {
     }
 
     SECTION("queryStream") {
+        auto[querySql, binds, expectedData, expectedSize, expectedSuccess] = GENERATE_COPY(
+                table<QString, QVector<QVariant>, QVector<TestObject>, size_t, bool>(
+                        {
+                                {
+                                        "select * from tests order by id asc limit 10",
+                                        {},  inputs.mid(0, 10), 10, true,
+                                },
+                                {
+                                        "select * from tests where id = ?",
+                                        {1}, inputs.mid(0, 1),  1,  true,
+                                },
+                                {
+                                        "select * from tests2 where id = ?",
+                                        {1}, {},                0,  false
+                                },
+                        }
+                ));
 
+        QVector<TestObject> output;
+
+        auto actualSize = sqlx::DbUtils::queryStream<TestObject>(db, querySql, binds, [&](auto &obj) {
+            output.append(obj);
+            return true;
+        });
+
+        if (expectedSuccess) {
+            REQUIRE(actualSize);
+            CHECK(*actualSize == expectedSize);
+        } else {
+            REQUIRE(!actualSize);
+        }
+
+        CHECK(output == expectedData);
+
+    }
+
+    SECTION("queryRawStream") {
+        auto[querySql, binds, successExpected, columnExpected] = GENERATE_COPY(
+                table<QString, QVector<QVariant>, std::optional<size_t>, QVector<QString>>(
+                        {
+                                {
+                                        "select id, name from tests order by id asc limit 10",
+                                        {},  10,           {"id", "name"}
+                                },
+                                {
+                                        "select * from tests2 where id = ?",
+                                        {1}, std::nullopt, {}
+                                },
+                        }
+                ));
+
+        auto columns = columnExpected;
+
+        auto actualResult = sqlx::DbUtils::queryRawStream(db, querySql, binds, [&](QSqlRecord record) {
+            for (const QString &columnName : columns) {
+                REQUIRE(record.contains(columnName));
+            }
+            return true;
+        });
+
+        CHECK(actualResult.toOptional() == successExpected);
+    }
+
+    SECTION("queryFirst POD") {
+        auto[sql, binds, expected] = GENERATE_COPY(table<QString, QVector<QVariant>, std::optional<TestObject>>(
+                {
+                        {
+                                "select * from tests where id = ?",
+                                {1},  inputs[0],
+                        },
+                        {
+                                "select * from tests order by id asc",
+                                {},   inputs[0],
+                        },
+                        {
+                                "select * from tests where id = ?",
+                                {-1}, std::nullopt,
+                        },
+                        {
+                                "select * from tests2",
+                                {},   std::nullopt,
+                        },
+                }));
+
+        auto actual = sqlx::DbUtils::queryFirst<TestObject>(db, sql, binds);
+        CHECK(actual.toOptional() == expected);
+    }
+
+    SECTION("queryFirst primitive") {
+        auto[sql, binds, expected] = GENERATE_COPY(table<QString, QVector<QVariant>, std::optional<int>>(
+                {
+                        {
+                                "select id from tests where id = ?",
+                                {1},  inputs[0].id,
+                        },
+                        {
+                                "select id from tests order by id asc",
+                                {},   inputs[0].id,
+                        },
+                        {
+                                "select id from tests where id = ?",
+                                {-1}, std::nullopt,
+                        },
+                        {
+                                "select id from tests2",
+                                {},   std::nullopt,
+                        },
+                }));
+
+        auto actual = sqlx::DbUtils::queryFirst<int>(db, sql, binds);
+        CHECK(actual.toOptional() == expected);
+    }
+
+    SECTION("insert") {
+        auto[sql, binds, expected] = GENERATE(table<QString, QVector<QVariant>, std::optional<int>>(
+                {
+                        {
+                                "insert into tests (id, name) values (?, 'test')",
+                                {100}, 100,
+                        },
+                        {
+                                "insert into tests (id, name) values (?, 'test')",
+                                {1},   std::nullopt,
+                        }
+                }));
+
+        auto actual = sqlx::DbUtils::insert<int>(db, sql, binds);
+        CHECK(actual.toOptional() == expected);
+    }
+
+    SECTION("update") {
+        auto[sql, binds, expected] = GENERATE_COPY(table<QString, QVector<QVariant>, std::optional<int>>(
+                {
+                        {
+                                "update tests set name = 'test_name' where id = ? or id = ?",
+                                {1, 2}, 2,
+                        },
+                        {
+                                "delete from tests where 1",
+                                {},     inputs.size(),
+                        },
+                        {
+                                "delete from tests2 where 1",
+                                {},     std::nullopt
+                        },
+                }));
+
+        auto actual = sqlx::DbUtils::update(db, sql, binds);
+        CHECK(actual.toOptional() == expected);
     }
 
     db.close();
