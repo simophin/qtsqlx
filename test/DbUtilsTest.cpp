@@ -59,14 +59,12 @@ TEST_CASE("Should read from POD") {
     auto[inputRecord, expectedObject] = GENERATE(table<QSqlRecord, TestObject>(
             {
                     {
-                            createRecord(QStringLiteral("id"), 1, QStringLiteral("name"), QStringLiteral("Name1")),
-                            TestObject{1, QStringLiteral("Name1")},
+                            createRecord("id", 1, "name", QStringLiteral("Name1")),
+                            TestObject{1, "Name1"},
                     },
                     {
-                            createRecord(QStringLiteral("id"), QStringLiteral("string id"),
-                                         QStringLiteral("name"),
-                                         QStringLiteral("Name1")),
-                            TestObject{0, QStringLiteral("Name1")},
+                            createRecord("id", QStringLiteral("string id"), "name", QStringLiteral("Name1")),
+                            TestObject{0, "Name1"},
                     },
             }));
 
@@ -79,12 +77,12 @@ TEST_CASE("Should read from POD") {
 TEST_CASE("Should read from int") {
     auto[inputRecord, expectedOutput, expectedSuccess] = GENERATE(table<QSqlRecord, int, bool>(
             {
-                    {createRecord(QStringLiteral("key1"), 5),                                5, true},
-                    {createRecord(QStringLiteral("key1"), 5.0),                              5, true},
-                    {createRecord(QStringLiteral("key1"), QStringLiteral("5")),              5, true},
-                    {createRecord(QStringLiteral("key1"), true),                             1, true},
-                    {createRecord(QStringLiteral("key1"), false),                            0, true},
-                    {createRecord(QStringLiteral("key1"), QStringLiteral("unknown number")), 0, false},
+                    {createRecord("key1", 5),                                5, true},
+                    {createRecord("key1", 5.0),                              5, true},
+                    {createRecord("key1", QStringLiteral("5")),              5, true},
+                    {createRecord("key1", true),                             1, true},
+                    {createRecord("key1", false),                            0, true},
+                    {createRecord("key1", QStringLiteral("unknown number")), 0, false},
             }
     ));
 
@@ -96,11 +94,11 @@ TEST_CASE("Should read from int") {
 TEST_CASE("Should read from string") {
     auto[inputRecord, expectedOutput, expectedSuccess] = GENERATE(table<QSqlRecord, QString, bool>(
             {
-                    {createRecord(QStringLiteral("key1"), 5),                                QStringLiteral("5"), true},
-                    {createRecord(QStringLiteral("key1"), 5.0),                              QStringLiteral("5"), true},
-                    {createRecord(QStringLiteral("key1"), QStringLiteral("5")),              QStringLiteral("5"), true},
-                    {createRecord(QStringLiteral("key1"), true),                             QStringLiteral("true"), true},
-                    {createRecord(QStringLiteral("key1"), false),                            QStringLiteral("false"), true},
+                    {createRecord("key1", 5),                   QStringLiteral("5"),     true},
+                    {createRecord("key1", 5.0),                 QStringLiteral("5"),     true},
+                    {createRecord("key1", QStringLiteral("5")), QStringLiteral("5"),     true},
+                    {createRecord("key1", true),                QStringLiteral("true"),  true},
+                    {createRecord("key1", false),               QStringLiteral("false"), true},
             }
     ));
 
@@ -109,147 +107,84 @@ TEST_CASE("Should read from string") {
     CHECK(actual == expectedOutput);
 }
 
+TEST_CASE("Should perform correct database operations") {
+    auto db = QSqlDatabase::addDatabase("QSQLITE");
+    db.setDatabaseName(":memory:");
+    REQUIRE(db.open());
+    REQUIRE(sqlx::DbUtils::update(db, "create table tests (id integer primary key, name text)"));
 
-//class DbUtilsTest : public QObject {
-//Q_OBJECT
-//
-//    QSqlDatabase db;
-//
-//private slots:
-//
-//    void initTestCase() {
-//        db = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"));
-//        db.setDatabaseName(QStringLiteral(":memory:"));
-//        QVERIFY(db.open());
-//
-//        sqlx::DbUtils::update(
-//                db,
-//                QStringLiteral("create table tests (id integer primary key, name text)")
-//        );
-//    };
-//
-//    void cleanupTestCase() {
-//        db.close();
-//    }
-//
-//    void testReadFromPOD() {
-//        struct {
-//            const char *testName;
-//            QSqlRecord record;
-//            TestObject object;
-//        } testData[] = {
-//                {
-//                        "Happy day",
-//                        createRecord(QStringLiteral("id"), 1, QStringLiteral("name"),
-//                                     QStringLiteral("Name1")),
-//                        TestObject{1, QStringLiteral("Name1")},
-//                },
-//
-//                {
-//                        "Incorrect type",
-//                        createRecord(QStringLiteral("id"), QStringLiteral("string id"),
-//                                     QStringLiteral("name"),
-//                                     QStringLiteral("Name1")),
-//                        TestObject{0, QStringLiteral("Name1")},
-//                },
-//        };
-//
-//        for (const auto &[testName, record, expected] : testData) {
-//            TestObject actual;
-//            QVERIFY(sqlx::DbUtils::readFrom(actual, record));
-//            QCOMPARE(actual.id, expected.id);
-//            QCOMPARE(actual.name, expected.name);
-//        }
-//    }
-//
-//    void testReadFromInt() {
-//        int actual = 0;
-//        QVERIFY(sqlx::DbUtils::readFrom(actual, createRecord(QStringLiteral("key1"), 5)));
-//        QCOMPARE(actual, 5);
-//
-//        actual = 0;
-//        QVERIFY(sqlx::DbUtils::readFrom(actual, createRecord(QStringLiteral("key1"), QStringLiteral("5"))));
-//        QCOMPARE(actual, 5);
-//
-//        actual = 0;
-//        QVERIFY(!sqlx::DbUtils::readFrom(actual,
-//                                         createRecord(QStringLiteral("key1"), QStringLiteral("5xu"))));
-//        QCOMPARE(actual, 0);
-//    }
-//
-//    void testReadFromString() {
-//        QString actual;
-//        QVERIFY(sqlx::DbUtils::readFrom(actual, createRecord(QStringLiteral("key1"), 5)));
-//        QCOMPARE(actual, QStringLiteral("5"));
-//
-//        actual.clear();
-//        QVERIFY(sqlx::DbUtils::readFrom(actual, createRecord(QStringLiteral("key1"), QStringLiteral("5"))));
-//        QCOMPARE(actual, QStringLiteral("5"));
-//
-//        actual.clear();
-//        QVERIFY(sqlx::DbUtils::readFrom(actual, createRecord(QStringLiteral("key1"), true)));
-//        QCOMPARE(actual, QStringLiteral("true"));
-//    }
-//
-//    void testQueryList_data() {
-//        QTest::addColumn<QString>("querySql");
-//        QTest::addColumn<QVector<QVariant>>("binds");
-//        QTest::addColumn<QVector<TestObject>>("input");
-//        QTest::addColumn<QVector<TestObject>>("expectedData");
-//        QTest::addColumn<bool>("expectedSuccess");
-//
-//        QTest::newRow("happy day")
-//                << QStringLiteral("select * from tests")
-//                << QVector<QVariant>()
-//                << QVector<TestObject>{{1, QStringLiteral("Name 1")},
-//                                       {2, QStringLiteral("Name 2")}}
-//                << QVector<TestObject>{{1, QStringLiteral("Name 1")},
-//                                       {2, QStringLiteral("Name 2")}}
-//                << true;
-//
-//        QTest::newRow("happy day #2")
-//                << QStringLiteral("select * from tests where id = 1")
-//                << QVector<QVariant>()
-//                << QVector<TestObject>{{1, QStringLiteral("Name 1")},
-//                                       {2, QStringLiteral("Name 2")}}
-//                << QVector<TestObject>{{1, QStringLiteral("Name 1")}}
-//                << true;
-//
-//        QTest::newRow("incorrect syntax")
-//                << QStringLiteral("select * from tests2")
-//                << QVector<QVariant>()
-//                << QVector<TestObject>{{1, QStringLiteral("Name 1")},
-//                                       {2, QStringLiteral("Name 2")}}
-//                << QVector<TestObject>()
-//                << false;
-//    }
-//
-//    void testQueryList() {
-//        QFETCH(QString, querySql);
-//        QFETCH(QVector<QVariant>, binds);
-//        QFETCH(QVector<TestObject>, input);
-//        QFETCH(QVector<TestObject>, expectedData);
-//        QFETCH(bool, expectedSuccess);
-//
-//        for (const auto &obj : input) {
-//            QVERIFY(sqlx::DbUtils::insert<decltype(TestObject::id)>(
-//                    db,
-//                    QStringLiteral("insert into tests (id, name) values (?, ?)"),
-//                    {obj.id, obj.name}).success());
-//        }
-//
-//        auto actual = sqlx::DbUtils::queryList<TestObject>(db, querySql, binds);
-//        if (expectedSuccess) {
-//            QVERIFY(actual.success());
-//            std::sort(actual->begin(), actual->end());
-//            QCOMPARE(*actual, expectedData);
-//        } else {
-//            QVERIFY(actual.error());
-//        }
-//
-//        QVERIFY(sqlx::DbUtils::update(db,
-//                                      QStringLiteral("delete from tests where 1")).orDefault(0) > 0);
-//    }
-//};
+    QVector<TestObject> inputs(50);
+    for (int i = 0; i < inputs.size(); i++) {
+        inputs[i].id = i + 1;
+        inputs[i].name = QStringLiteral("Name %1").arg(i + 1);
+        REQUIRE(sqlx::DbUtils::insert<int>(db, "insert into tests (id, name) values (?, ?)",
+                { inputs[i].id, inputs[i].name }));
+    }
+
+    SECTION("queryList with POD") {
+        auto[querySql, binds, expectedData, expectedSuccess] = GENERATE_COPY(
+                table<QString, QVector<QVariant>, QVector<TestObject>, bool>(
+                        {
+                                {
+                                        "select * from tests order by id asc limit 10",
+                                        {}, inputs.mid(0, 10), true,
+                                },
+                                {
+                                        "select * from tests where id = ?",
+                                        {1}, inputs.mid(0, 1), true,
+                                },
+                                {
+                                        "select * from tests2 where id = ?",
+                                        {1}, {}, false,
+                                },
+                        }
+                ));
+
+        auto actual = sqlx::DbUtils::queryList<TestObject>(db, querySql, binds);
+        if (expectedSuccess) {
+            REQUIRE(actual.success());
+            std::sort(actual->begin(), actual->end());
+            CHECK(*actual == expectedData);
+        } else {
+            REQUIRE(actual.error());
+        }
+    }
+
+    SECTION("queryList with primitive") {
+        auto[querySql, binds, expectedData, expectedSuccess] = GENERATE(
+                table<QString, QVector<QVariant>,QVector<int>, bool>(
+                        {
+                                {
+                                        "select id from tests order by id asc limit 3",
+                                        {}, { 1, 2, 3 }, true,
+                                },
+                                {
+                                        "select id from tests where id = ?",
+                                        { 1 }, { 1 }, true,
+                                },
+                                {
+                                        "select * from tests2 where id = ?",
+                                        { 1 }, {}, false,
+                                },
+                        }
+                ));
+
+        auto actual = sqlx::DbUtils::queryList<int>(db, querySql, binds);
+        if (expectedSuccess) {
+            REQUIRE(actual.success());
+            std::sort(actual->begin(), actual->end());
+            CHECK(*actual == expectedData);
+        } else {
+            REQUIRE(actual.error());
+        }
+    }
+
+    SECTION("queryStream") {
+
+    }
+
+    db.close();
+}
+
 
 #include "DbUtilsTest.moc"
