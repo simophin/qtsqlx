@@ -16,6 +16,7 @@
 #include <QString>
 #include <QVector>
 #include <QVariant>
+#include <QTimeZone>
 #include <variant>
 
 #include <type_traits>
@@ -123,6 +124,17 @@ namespace sqlx {
                     }
                     if (!converted) {
                         qWarning().nospace() << "Unable to convert " << valueAsString << " to " << prop->type();
+                    }
+                }
+                else if (prop->type() == QVariant::DateTime) {
+                    // Try to convert to a date time.
+
+                    // Firstly try integer then string in UTC.
+                    bool ok;
+                    if (auto longValue = value.toLongLong(&ok); ok) {
+                        value = QDateTime::fromSecsSinceEpoch(longValue, QTimeZone::utc());
+                    } else {
+                        value = QDateTime::fromString(value.toString(), Qt::ISODateWithMs);
                     }
                 }
 
