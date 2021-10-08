@@ -18,7 +18,6 @@ set_property(TARGET QtSQLx PROPERTY LINKER_LANGUAGE CXX)
 option(BUILD_TESTS "Skip buildling tests" ON)
 
 if (BUILD_TESTS)
-find_package(Catch2 REQUIRED)
 add_executable(QtSQLx_test
         test/TypeUtilsTest.cpp
         test/DbUtilsTest.cpp
